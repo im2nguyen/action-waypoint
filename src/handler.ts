@@ -2,6 +2,7 @@ import { EventPayloads } from '@octokit/webhooks';
 import { Ctx } from './setup';
 import { exec, ExecOptions } from '@actions/exec';
 import * as core from '@actions/core';
+import * as github from '@actions/github';
 
 const LABEL_PREFIX = 'common';
 const URL_REGEX = /(?<=Deployment URL: )[^\n]+/;
@@ -167,7 +168,7 @@ export async function handleBuild(ctx: Ctx, payload: EventPayloads.WebhookPayloa
   const waypointOptions = await getCliOptions(ctx, payload);
 
   // Set status to pending
-  await updateCommitStatus(ctx, githubState.Pending);
+  // await updateCommitStatus(ctx, githubState.Pending);
 
   // Run init
   await initWaypoint(ctx);
@@ -180,25 +181,25 @@ export async function handleBuild(ctx: Ctx, payload: EventPayloads.WebhookPayloa
     }
   } catch (e) {
     // Set status to error
-    await updateCommitStatus(ctx, githubState.Error);
+    // await updateCommitStatus(ctx, githubState.Error);
     throw new Error(`build failed: ${e}`);
   }
 
   // Set status to success
-  await updateCommitStatus(ctx, githubState.Success);
+  // await updateCommitStatus(ctx, githubState.Success);
 }
 
 export async function handleDeploy(ctx: Ctx, payload: EventPayloads.WebhookPayloadPush): Promise<void> {
   const waypointOptions = await getCliOptions(ctx, payload);
 
   // Set status to pending
-  await updateCommitStatus(ctx, githubState.Pending);
+  // await updateCommitStatus(ctx, githubState.Pending);
 
   // Create a github deployment, which also updates the status
   const deploy = await createDeployment(ctx);
 
   // Update the status of the deployment
-  await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
+  // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
 
   // This is pretty unfortunate, but if you run `waypoint deploy` too soon
   // after `waypoint build` you might not get the recently built artifact. So
@@ -221,7 +222,7 @@ export async function handleDeploy(ctx: Ctx, payload: EventPayloads.WebhookPaylo
     },
   };
 
-  await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
+  // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
 
   // Run the deploy
   try {
@@ -230,8 +231,8 @@ export async function handleDeploy(ctx: Ctx, payload: EventPayloads.WebhookPaylo
       throw new Error(`deploy failed with exit code ${buildCode}`);
     }
   } catch (e) {
-    await updateCommitStatus(ctx, githubState.Error);
-    await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Failure);
+    // await updateCommitStatus(ctx, githubState.Error);
+    // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Failure);
     throw new Error(`deploy failed: ${e}`);
   }
 
@@ -243,15 +244,56 @@ export async function handleDeploy(ctx: Ctx, payload: EventPayloads.WebhookPaylo
   }
 
   // Update the commit status
-  await updateCommitStatus(ctx, githubState.Success, deployUrl);
-  await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Success);
+  // await updateCommitStatus(ctx, githubState.Success, deployUrl);
+  // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Success);
+
+  if (github.context.eventName !== "pull_request") {
+    return;
+  }
+
+  // add comment to PR
+  const context = github.context;
+  const repo = context.repo;
+  const prNum = context.payload!.pull_request!.number;
+  const msg = `Deployment URL: ${deployUrl}`
+
+  // Get all comments we currently have...
+  // (this is an asynchronous function)
+  const { data: comments } = await ctx.octokit.issues.listComments({
+    ...repo,
+    issue_number: prNum,
+  });
+
+  // ... and check if there is already a comment by us
+  const comment = comments.find((comment: any) => {
+    return (
+      comment.user.login === "github-actions[bot]" &&
+      comment.body.startsWith("## Result of Benchmark Tests\n")
+    );
+  });
+
+  // If yes, update that
+  if (comment) {
+    await ctx.octokit.issues.updateComment({
+      ...repo,
+      comment_id: comment.id,
+      body: msg
+    });
+    // if not, create a new comment
+  } else {
+    await ctx.octokit.issues.createComment({
+      ...repo,
+      issue_number: prNum,
+      body: msg
+    });
+  }
 }
 
 export async function handleRelease(ctx: Ctx, payload: EventPayloads.WebhookPayloadPush): Promise<void> {
   const waypointOptions = await getCliOptions(ctx, payload);
 
   // Set status to pending
-  await updateCommitStatus(ctx, githubState.Pending);
+  // await updateCommitStatus(ctx, githubState.Pending);
 
   // Run init
   await initWaypoint(ctx);
@@ -259,7 +301,7 @@ export async function handleRelease(ctx: Ctx, payload: EventPayloads.WebhookPayl
   try {
     const releaseCode = await exec('waypoint', ['release', ...waypointOptions]);
     if (releaseCode !== 0) {
-      await updateCommitStatus(ctx, githubState.Error);
+      // await updateCommitStatus(ctx, githubState.Error);
       throw new Error(`release failed with exit code ${releaseCode}`);
     }
   } catch (e) {
@@ -267,5 +309,5 @@ export async function handleRelease(ctx: Ctx, payload: EventPayloads.WebhookPayl
   }
 
   // Update the commit status to success
-  await updateCommitStatus(ctx, githubState.Success);
+  // await updateCommitStatus(ctx, githubState.Success);
 }

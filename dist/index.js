@@ -21850,6 +21850,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.handleRelease = exports.handleDeploy = exports.handleBuild = exports.initWaypoint = exports.getCliOptions = void 0;
 const exec_1 = __webpack_require__(514);
 const core = __importStar(__webpack_require__(186));
+const github = __importStar(__webpack_require__(438));
 const LABEL_PREFIX = 'common';
 const URL_REGEX = /(?<=Deployment URL: )[^\n]+/;
 const WAIT_FOR_BUILD = 8000;
@@ -22009,7 +22010,7 @@ function handleBuild(ctx, payload) {
     return __awaiter(this, void 0, void 0, function* () {
         const waypointOptions = yield getCliOptions(ctx, payload);
         // Set status to pending
-        yield updateCommitStatus(ctx, githubState.Pending);
+        // await updateCommitStatus(ctx, githubState.Pending);
         // Run init
         yield initWaypoint(ctx);
         // Run the build
@@ -22021,11 +22022,11 @@ function handleBuild(ctx, payload) {
         }
         catch (e) {
             // Set status to error
-            yield updateCommitStatus(ctx, githubState.Error);
+            // await updateCommitStatus(ctx, githubState.Error);
             throw new Error(`build failed: ${e}`);
         }
         // Set status to success
-        yield updateCommitStatus(ctx, githubState.Success);
+        // await updateCommitStatus(ctx, githubState.Success);
     });
 }
 exports.handleBuild = handleBuild;
@@ -22033,11 +22034,11 @@ function handleDeploy(ctx, payload) {
     return __awaiter(this, void 0, void 0, function* () {
         const waypointOptions = yield getCliOptions(ctx, payload);
         // Set status to pending
-        yield updateCommitStatus(ctx, githubState.Pending);
+        // await updateCommitStatus(ctx, githubState.Pending);
         // Create a github deployment, which also updates the status
         const deploy = yield createDeployment(ctx);
         // Update the status of the deployment
-        yield createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
+        // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
         // This is pretty unfortunate, but if you run `waypoint deploy` too soon
         // after `waypoint build` you might not get the recently built artifact. So
         // we just naively wait.
@@ -22056,7 +22057,7 @@ function handleDeploy(ctx, payload) {
                 core.info(output);
             },
         };
-        yield createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
+        // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Pending);
         // Run the deploy
         try {
             const buildCode = yield exec_1.exec('waypoint', ['deploy', ...waypointOptions], options);
@@ -22065,8 +22066,8 @@ function handleDeploy(ctx, payload) {
             }
         }
         catch (e) {
-            yield updateCommitStatus(ctx, githubState.Error);
-            yield createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Failure);
+            // await updateCommitStatus(ctx, githubState.Error);
+            // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Failure);
             throw new Error(`deploy failed: ${e}`);
         }
         let deployUrl = undefined;
@@ -22076,8 +22077,32 @@ function handleDeploy(ctx, payload) {
             core.info(`got deployment url from output: ${deployUrl}`);
         }
         // Update the commit status
-        yield updateCommitStatus(ctx, githubState.Success, deployUrl);
-        yield createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Success);
+        // await updateCommitStatus(ctx, githubState.Success, deployUrl);
+        // await createDeploymentStatus(ctx, deploy.id, githubDeploymentState.Success);
+        if (github.context.eventName !== "pull_request") {
+            return;
+        }
+        // add comment to PR
+        const context = github.context;
+        const repo = context.repo;
+        const prNum = context.payload.pull_request.number;
+        const msg = `Deployment URL: ${deployUrl}`;
+        // Get all comments we currently have...
+        // (this is an asynchronous function)
+        const { data: comments } = yield ctx.octokit.issues.listComments(Object.assign(Object.assign({}, repo), { issue_number: prNum }));
+        // ... and check if there is already a comment by us
+        const comment = comments.find((comment) => {
+            return (comment.user.login === "github-actions[bot]" &&
+                comment.body.startsWith("## Result of Benchmark Tests\n"));
+        });
+        // If yes, update that
+        if (comment) {
+            yield ctx.octokit.issues.updateComment(Object.assign(Object.assign({}, repo), { comment_id: comment.id, body: msg }));
+            // if not, create a new comment
+        }
+        else {
+            yield ctx.octokit.issues.createComment(Object.assign(Object.assign({}, repo), { issue_number: prNum, body: msg }));
+        }
     });
 }
 exports.handleDeploy = handleDeploy;
@@ -22085,13 +22110,13 @@ function handleRelease(ctx, payload) {
     return __awaiter(this, void 0, void 0, function* () {
         const waypointOptions = yield getCliOptions(ctx, payload);
         // Set status to pending
-        yield updateCommitStatus(ctx, githubState.Pending);
+        // await updateCommitStatus(ctx, githubState.Pending);
         // Run init
         yield initWaypoint(ctx);
         try {
             const releaseCode = yield exec_1.exec('waypoint', ['release', ...waypointOptions]);
             if (releaseCode !== 0) {
-                yield updateCommitStatus(ctx, githubState.Error);
+                // await updateCommitStatus(ctx, githubState.Error);
                 throw new Error(`release failed with exit code ${releaseCode}`);
             }
         }
@@ -22099,7 +22124,7 @@ function handleRelease(ctx, payload) {
             throw new Error(`release failed: ${e}`);
         }
         // Update the commit status to success
-        yield updateCommitStatus(ctx, githubState.Success);
+        // await updateCommitStatus(ctx, githubState.Success);
     });
 }
 exports.handleRelease = handleRelease;
