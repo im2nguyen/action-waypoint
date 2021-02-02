@@ -21879,17 +21879,17 @@ function updateCommitStatus(ctx, status, url) {
             case githubState.Error: {
                 state = githubState.Error;
                 description = `The ${ctx.operation} encountered an error`;
-                break;
+                // break;
             }
             case githubState.Pending: {
                 state = githubState.Pending;
                 description = `The ${ctx.operation} has started running`;
-                break;
+                // break;
             }
             case githubState.Success: {
                 state = githubState.Success;
                 description = `The ${ctx.operation} has completed successfully`;
-                break;
+                // break;
             }
         }
         try {
