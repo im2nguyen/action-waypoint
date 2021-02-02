@@ -21975,6 +21975,8 @@ function getCliOptions(ctx, payload) {
             '-workspace',
             ctx.workspace,
             '-label',
+            `${LABEL_PREFIX}/vcs-branch=${ctx.context.ref.replace('refs/heads/', '')}`,
+            '-label',
             `${LABEL_PREFIX}/vcs-ref=${ctx.context.ref}`,
             '-label',
             `${LABEL_PREFIX}/vcs-sha=${payload.after}`,
