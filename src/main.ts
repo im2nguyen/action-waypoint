@@ -31,8 +31,8 @@ export async function run(): Promise<void> {
     // Create context, will error in failure
     await setup.createContextConfig(ctx);
 
-    // We only deal with push events so return on everything else we are sent
-    if (github.context.eventName !== 'push') {
+    // We only deal with push and pull requests events so return on everything else we are sent
+    if (!['push', 'pull_request'].includes(github.context.eventName)) {
       return;
     }
 
